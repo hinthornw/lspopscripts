@@ -148,6 +148,9 @@ def run_evaluations():
         project_metadata={
             "random_number": random.random(),
             **get_git_info(),
+            "a nested val": {"a": {"b": {"c": 1}}},
+            "🦜": ["a", "list", "of", "things"],
+            "disorderly": 5 if random.random() < 0.5 else {"id": "foo"},
         },
     )
 
