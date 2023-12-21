@@ -1,3 +1,4 @@
+"""Populate a dataset with test runs containing random data."""
 import random
 import math
 from langsmith import Client
@@ -5,6 +6,7 @@ from langsmith.evaluation.evaluator import run_evaluator
 from langchain.smith.evaluation.name_generation import random_name
 from langchain.smith import RunEvalConfig
 from langsmith import traceable
+from concurrent.futures import ThreadPoolExecutor
 
 
 import subprocess
@@ -89,6 +91,12 @@ def always_one(run, example=None):
     return {"key": "always_1", "score": 1}
 
 
+@run_evaluator
+def feedback_stats(run, example=None):
+    # Just to check coercion
+    return {"key": "feedback_stats_", "score": 1}
+
+
 _DATASET_NAME = "Random KV Dataset"
 
 
@@ -114,6 +122,8 @@ def create_dataset():
 
 @traceable()
 def my_model(question):
+    if random.random() < 0.05:
+        raise ValueError("Random error")
     return {"answer": str(random.random())}
 
 
@@ -124,7 +134,15 @@ def run_evaluations():
         dataset_name=_DATASET_NAME,
         llm_or_chain_factory=my_model,
         evaluation=RunEvalConfig(
-            custom_evaluators=[random_evaluator, randomly_null, big_numbers, log_loss],
+            custom_evaluators=[
+                random_evaluator,
+                randomly_null,
+                big_numbers,
+                log_loss,
+                always_one,
+                hundred_binary,
+                feedback_stats,
+            ],
         ),
         verbose=True,
         project_metadata={
@@ -134,15 +152,25 @@ def run_evaluations():
     )
 
 
-def main():
+def main(n: int = 1):
     client = Client()
     print(client)
     if not client.has_dataset(dataset_name=_DATASET_NAME):
         print("Creating dataset")
         create_dataset()
     print("Running evaluations")
-    run_evaluations()
+    if n == 1:
+        run_evaluations()
+    else:
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for _ in range(n):
+                executor.submit(run_evaluations)
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n", type=int, default=1)
+    args = parser.parse_args()
+    main(args.n)
