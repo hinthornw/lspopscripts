@@ -9,53 +9,6 @@ from langsmith import traceable
 from concurrent.futures import ThreadPoolExecutor
 
 
-import subprocess
-from functools import cache
-import threading
-from typing import Optional
-
-_git_lock = threading.RLock()
-
-
-def run_git_command(command):
-    with _git_lock:  # Ensure thread safety for git commands
-        try:
-            return subprocess.check_output(
-                ["git"] + command, encoding="utf-8", stderr=subprocess.DEVNULL
-            ).strip()
-        except subprocess.CalledProcessError:
-            return None
-
-
-@cache
-def convert_to_https_url(url: str) -> Optional[str]:
-    if url.startswith("git@"):
-        url = url.replace("git@", "https://").replace(":", "/")
-    elif url.startswith("http://"):
-        url = url.replace("http://", "https://")
-    return url if url.startswith("https://") else None
-
-
-@cache
-def get_git_info():
-    remote_url = run_git_command(["config", "--get", "remote.origin.url"])
-    https_url = convert_to_https_url(remote_url) if remote_url else None
-
-    git_info = {
-        "commit": run_git_command(["rev-parse", "HEAD"]),
-        "branch": run_git_command(["rev-parse", "--abbrev-ref", "HEAD"]),
-        "tag": run_git_command(["describe", "--tags", "--exact-match"]),
-        "dirty": run_git_command(["status", "--porcelain"]) != "",
-        "author_name": run_git_command(["log", "-1", "--format=%an"]),
-        "author_email": run_git_command(["log", "-1", "--format=%ae"]),
-        "commit_message": run_git_command(["log", "-1", "--format=%B"]),
-        "commit_time": run_git_command(["log", "-1", "--format=%cd"]),
-        "remote_url": https_url,
-    }
-
-    return git_info
-
-
 @run_evaluator
 def random_evaluator(run, example=None):
     return {"key": "my_random", "score": random.random() * 10}
@@ -145,9 +98,9 @@ def run_evaluations():
             ],
         ),
         verbose=True,
+        tags=["random", "test"],
         project_metadata={
             "random_number": random.random(),
-            **get_git_info(),
             "a nested val": {"a": {"b": {"c": 1}}},
             "🦜": ["a", "list", "of", "things"],
             "disorderly": 5 if random.random() < 0.5 else {"id": "foo"},
